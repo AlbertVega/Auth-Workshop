@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Final
 
+import bcrypt
 import pymysql
 
 # ---------------------------------------------------------------------------
@@ -38,7 +39,7 @@ _ENV_MYSQL_DATABASE: Final = "MYSQL_DATABASE"
 
 _DEFAULT_MYSQL_HOST: Final = "127.0.0.1"
 _DEFAULT_MYSQL_USER: Final = "root"
-_DEFAULT_MYSQL_PASSWORD: Final = ""
+_DEFAULT_MYSQL_PASSWORD: Final = ""# Reemplaza con tu contraseña
 _DEFAULT_MYSQL_DATABASE: Final = "ejercicio_auth"
 _DEFAULT_CHARSET: Final = "utf8mb4"
 
@@ -68,9 +69,9 @@ _CATALOG_TABLES: Final[frozenset[str]] = frozenset({Table.OVNIS, Table.GHOSTS, T
 # nunca pongan ahí un string que venga del input() sin validar.
 
 _SQL_LOGIN: Final[str] = (
-    "SELECT u.id, u.email, t.code AS team_code, t.display_name AS team_name "
+    "SELECT u.id, u.email, u.password_hash, t.code AS team_code, t.display_name AS team_name "
     "FROM users u JOIN teams t ON t.id = u.team_id "
-    "WHERE u.email = %s AND u.password_plain = %s"
+    "WHERE u.email = %s"
 )
 _SQL_SELECT_CATALOG: Final[str] = "SELECT id, name FROM {table} ORDER BY id"
 _SQL_INSERT_CATALOG: Final[str] = "INSERT INTO {table} (name) VALUES (%s)"
@@ -151,18 +152,38 @@ def connect() -> pymysql.connections.Connection:
 
 def login(conn: pymysql.connections.Connection) -> dict[str, Any] | None:
     """
-    Autenticación (AuthN): comprueba correo + contraseña contra `users`.
+    Autenticación (AuthN): comprueba correo + contraseña contra `users` (hasheada).
 
     Devuelve un dict con email y datos del equipo si hay coincidencia; si no, None.
-    Profesor: observe que la contraseña hoy está en texto plano en la BD — eso es
-    vulnerabilidad de diseño (etapa 2 del taller: hash).
+    La contraseña se verifica contra el hash bcrypt almacenado en la BD.
     """
     print("--- Inicio de sesión ---")
     email = input("Correo: ").strip().lower()
     password = input("Contraseña: ").strip()
+    
     with conn.cursor() as cur:
-        cur.execute(_SQL_LOGIN, (email, password))
-        return cur.fetchone()
+        cur.execute(_SQL_LOGIN, (email,))
+        user = cur.fetchone()
+    
+    # Si no existe el usuario, retorna None
+    if not user:
+        return None
+    
+    # Aca verifica que el hash de la contraseña escrita coincida con el guardado
+    try:
+        if not bcrypt.checkpw(password.encode('utf-8'), user['password_hash'].encode('utf-8')):
+            return None
+    except Exception:
+        # Si hay error en la verificación del hash, rechaza
+        return None
+    
+    # Contraseña correcta: retorna los datos (sin el hash)
+    return {
+        'id': user['id'],
+        'email': user['email'],
+        'team_code': user['team_code'],
+        'team_name': user['team_name'],
+    }
 
 
 def _assert_catalog_table(table: str) -> None:
