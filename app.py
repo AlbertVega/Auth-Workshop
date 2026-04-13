@@ -192,25 +192,35 @@ def list_catalog(conn: pymysql.connections.Connection, spec: CatalogView, user: 
     según la matriz. Hoy no se pasa `user` a esta función: es el bug pedagógico.
     """
     _assert_catalog_table(spec.table)
-    #------------- Obtener datos de la tabla elegida -------------#
+    #------------- Verificar acceso -------------#
     access_granted = _can_access_catalog(user['team_code'], spec.table)
+    if not access_granted:
+        print("Acceso denegado.")
+        return
+    #------------- Verificar acceso -------------#
 
-    if access_granted:
-        sql = _SQL_SELECT_CATALOG.format(table=spec.table)
-        with conn.cursor() as cur:
-            cur.execute(sql)
-            rows = cur.fetchall()
-        print(f"\n--- {spec.title} ---")
-        for row in rows:
-            print(f"  [{row['id']}] {row['name']}")
-        if not rows:
-            print("  (vacío)")
+    sql = _SQL_SELECT_CATALOG.format(table=spec.table)
+    with conn.cursor() as cur:
+        cur.execute(sql)
+        rows = cur.fetchall()
+    print(f"\n--- {spec.title} ---")
+    for row in rows:
+        print(f"  [{row['id']}] {row['name']}")
+    if not rows:
+        print("  (vacío)")
 
 
-def add_catalog_item(conn: pymysql.connections.Connection, spec: CatalogView) -> None:
+def add_catalog_item(conn: pymysql.connections.Connection, spec: CatalogView, user: dict[str, Any]) -> None:
     """
     INSERT en catálogo. Profesor: igual que list_catalog — falta cruzar con el equipo del usuario.
     """
+    #------------- Verificar acceso -------------#
+    access_granted = _can_access_catalog(user['team_code'], spec.table)
+    if not access_granted:
+        print("Acceso denegado.")
+        return
+    #------------- Verificar acceso -------------#
+
     _assert_catalog_table(spec.table)
     name = input("Nombre del ítem: ").strip()
     if not name:
@@ -306,7 +316,7 @@ def run_menu(conn: pymysql.connections.Connection, user: dict[str, Any]) -> None
             if spec is None:
                 print("Opción inválida.")
             else:
-                add_catalog_item(conn, spec)
+                add_catalog_item(conn, spec, user)
         elif choice == MenuOption.LISTAR_NOTAS_TODAS:
             list_notas_all_teams(conn)
         elif choice == MenuOption.AGREGAR_NOTA_CUALQUIER_EQUIPO:
