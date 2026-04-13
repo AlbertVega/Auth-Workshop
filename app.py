@@ -77,11 +77,12 @@ _SQL_INSERT_CATALOG: Final[str] = "INSERT INTO {table} (name) VALUES (%s)"
 _SQL_LIST_NOTAS_ALL: Final[str] = (
     "SELECT n.id, n.contenido, t.display_name AS equipo "
     "FROM notas n JOIN teams t ON t.id = n.team_id "
+    "WHERE n.team_id = %s "
     "ORDER BY t.id, n.id"
 )
 _SQL_INSERT_NOTA: Final[str] = "INSERT INTO notas (team_id, contenido) VALUES (%s, %s)"
 
-_TITLE_NOTAS_TODAS: Final[str] = "Notas de investigación (todos los equipos)"
+_TITLE_NOTAS_TODAS: Final[str] = "Notas de investigación del equipo"
 
 # ---------------------------------------------------------------------------
 # Menú — Enum evita comparar contra "1", "2" esparcidos en todo el archivo
@@ -131,6 +132,11 @@ _TEAM_ID_BY_LIST_KEY: Final[dict[str, int]] = {
 # ghosts    | no    | sí     | no      | solo 2
 # wizards   | no    | no     | sí      | solo 3
 
+_TEAM_ID_BY_TEAM_CODE: Final[dict[str, int]] = {
+    "ovni": 1,
+    "ghosts": 2,
+    "wizards": 3,
+}
 
 def _mysql_config() -> dict[str, Any]:
     """Arma el dict que espera pymysql.connect."""
@@ -233,14 +239,16 @@ def add_catalog_item(conn: pymysql.connections.Connection, spec: CatalogView, us
     print("Guardado.")
 
 
-def list_notas_all_teams(conn: pymysql.connections.Connection) -> None:
+def list_notas_all_teams(conn: pymysql.connections.Connection, user: dict[str, Any]) -> None:
     """
     Lista notas de *todos* los equipos.
 
     Profesor: en producción esto sería la filtración por RLS o WHERE team_id = %s del usuario.
     """
+    team_id = _TEAM_ID_BY_TEAM_CODE.get(user['team_code'])
+
     with conn.cursor() as cur:
-        cur.execute(_SQL_LIST_NOTAS_ALL)
+        cur.execute(_SQL_LIST_NOTAS_ALL, (team_id,))
         rows = cur.fetchall()
     print(f"\n--- {_TITLE_NOTAS_TODAS} ---")
     for row in rows:
@@ -284,8 +292,8 @@ def _print_menu(user: dict[str, Any]) -> None:
     )
     print(f"{MenuOption.AGREGAR_CATALOGO.value}) Agregar ítem a cualquier lista")
     print(
-        f"{MenuOption.LISTAR_NOTAS_TODAS.value}) Ver notas de todos los equipos   "
-        f"{MenuOption.AGREGAR_NOTA_CUALQUIER_EQUIPO.value}) Agregar nota a cualquier equipo"
+        f"{MenuOption.LISTAR_NOTAS_TODAS.value}) Ver notas del equipo   "
+        f"{MenuOption.AGREGAR_NOTA_CUALQUIER_EQUIPO.value}) Agregar nota al equipo"
     )
     print(f"{MenuOption.SALIR.value}) Salir")
 
@@ -318,7 +326,7 @@ def run_menu(conn: pymysql.connections.Connection, user: dict[str, Any]) -> None
             else:
                 add_catalog_item(conn, spec, user)
         elif choice == MenuOption.LISTAR_NOTAS_TODAS:
-            list_notas_all_teams(conn)
+            list_notas_all_teams(conn, user)
         elif choice == MenuOption.AGREGAR_NOTA_CUALQUIER_EQUIPO:
             add_nota_any_team(conn)
 
