@@ -170,8 +170,20 @@ def _assert_catalog_table(table: str) -> None:
     if table not in _CATALOG_TABLES:
         raise ValueError(f"Tabla de catálogo no permitida: {table!r}")
 
+# ///////////// Verificar permisos según la matriz (etapa 1 del taller) /////////////
+def _can_access_catalog(team_code: str, table: str) -> bool:
+    """Verifica si el equipo puede acceder a la tabla de catálogo."""
+    if team_code == 'ovni' and table == Table.OVNIS:
+        return True
+    elif team_code == 'ghosts' and table == Table.GHOSTS:
+        return True
+    elif team_code == 'wizards' and table == Table.WIZARDS:
+        return True
+    else:
+        return False
+# ///////////// Verificar permisos según la matriz (etapa 1 del taller) /////////////
 
-def list_catalog(conn: pymysql.connections.Connection, spec: CatalogView) -> None:
+def list_catalog(conn: pymysql.connections.Connection, spec: CatalogView, user: dict[str, Any]) -> None:
     """
     Lista *toda* la tabla de catálogo elegida.
 
@@ -180,15 +192,19 @@ def list_catalog(conn: pymysql.connections.Connection, spec: CatalogView) -> Non
     según la matriz. Hoy no se pasa `user` a esta función: es el bug pedagógico.
     """
     _assert_catalog_table(spec.table)
-    sql = _SQL_SELECT_CATALOG.format(table=spec.table)
-    with conn.cursor() as cur:
-        cur.execute(sql)
-        rows = cur.fetchall()
-    print(f"\n--- {spec.title} ---")
-    for row in rows:
-        print(f"  [{row['id']}] {row['name']}")
-    if not rows:
-        print("  (vacío)")
+    #------------- Obtener datos de la tabla elegida -------------#
+    access_granted = _can_access_catalog(user['team_code'], spec.table)
+
+    if access_granted:
+        sql = _SQL_SELECT_CATALOG.format(table=spec.table)
+        with conn.cursor() as cur:
+            cur.execute(sql)
+            rows = cur.fetchall()
+        print(f"\n--- {spec.title} ---")
+        for row in rows:
+            print(f"  [{row['id']}] {row['name']}")
+        if not rows:
+            print("  (vacío)")
 
 
 def add_catalog_item(conn: pymysql.connections.Connection, spec: CatalogView) -> None:
@@ -283,7 +299,7 @@ def run_menu(conn: pymysql.connections.Connection, user: dict[str, Any]) -> None
         if choice == MenuOption.SALIR:
             break
         if choice in _CATALOG_BY_MENU:
-            list_catalog(conn, _CATALOG_BY_MENU[choice])
+            list_catalog(conn, _CATALOG_BY_MENU[choice], user)
         elif choice == MenuOption.AGREGAR_CATALOGO:
             sub = input("¿Lista? 1=ovnis 2=ghosts 3=wizards: ").strip()
             spec = _CATALOG_BY_LIST_KEY.get(sub)
