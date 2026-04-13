@@ -245,6 +245,7 @@ def list_notas_all_teams(conn: pymysql.connections.Connection, user: dict[str, A
 
     Profesor: en producción esto sería la filtración por RLS o WHERE team_id = %s del usuario.
     """
+    #------------- Mapeo con team_id para filtrado -------------#
     team_id = _TEAM_ID_BY_TEAM_CODE.get(user['team_code'])
 
     with conn.cursor() as cur:
@@ -257,18 +258,14 @@ def list_notas_all_teams(conn: pymysql.connections.Connection, user: dict[str, A
         print("  (vacío)")
 
 
-def add_nota_any_team(conn: pymysql.connections.Connection) -> None:
+def add_nota_any_team(conn: pymysql.connections.Connection, user: dict[str, Any]) -> None:
     """
     INSERT en `notas` con team_id elegido por quien usa la app.
 
     Profesor: en la matriz correcta, team_id debería ser siempre user['team_id'], sin preguntar.
     """
-    prompt = (
-        f"¿Equipo de la nota? {MenuOption.LISTAR_OVNIS.value}=OVNI "
-        f"{MenuOption.LISTAR_GHOSTS.value}=Ghosts {MenuOption.LISTAR_WIZARDS.value}=Wizards: "
-    )
-    key = input(prompt).strip()
-    team_id = _TEAM_ID_BY_LIST_KEY.get(key)
+   #------------- Eliminacion del prompt, uso del nuevo mapeo team_id -------------#
+    team_id = _TEAM_ID_BY_TEAM_CODE.get(user['team_code'])
     if team_id is None:
         print("Opción inválida.")
         return
@@ -328,7 +325,7 @@ def run_menu(conn: pymysql.connections.Connection, user: dict[str, Any]) -> None
         elif choice == MenuOption.LISTAR_NOTAS_TODAS:
             list_notas_all_teams(conn, user)
         elif choice == MenuOption.AGREGAR_NOTA_CUALQUIER_EQUIPO:
-            add_nota_any_team(conn)
+            add_nota_any_team(conn, user)
 
 
 def main() -> int:
