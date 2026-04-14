@@ -21,11 +21,13 @@ from __future__ import annotations
 
 import os
 import sys
+import random
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Final
 
 import pymysql
+import resend # pip install resend
 
 # ---------------------------------------------------------------------------
 # Variables de entorno — nombres en constantes para no equivocarse al escribir
@@ -35,6 +37,7 @@ _ENV_MYSQL_HOST: Final = "MYSQL_HOST"
 _ENV_MYSQL_USER: Final = "MYSQL_USER"
 _ENV_MYSQL_PASSWORD: Final = "MYSQL_PASSWORD"
 _ENV_MYSQL_DATABASE: Final = "MYSQL_DATABASE"
+_ENV_RESEND_API_KEY: Final = "RESEND_API_KEY"
 
 _DEFAULT_MYSQL_HOST: Final = "127.0.0.1"
 _DEFAULT_MYSQL_USER: Final = "root"
@@ -328,9 +331,43 @@ def run_menu(conn: pymysql.connections.Connection, user: dict[str, Any]) -> None
             add_nota_any_team(conn, user)
 
 
+def two_factor_auth(email: str) -> bool:
+    """Implementa autenticación de dos pasos enviando un código aleatorio vía Resend."""
+    api_key = os.environ.get(_ENV_RESEND_API_KEY)
+    if not api_key:
+        print("Advertencia: variable RESEND_API_KEY no encontrada. Acceso denegado.")
+        return False
+        
+    resend.api_key = api_key
+    codigo = str(random.randint(100000, 999999))
+    
+    try:
+        resend.Emails.send({
+            "from": "onboarding@resend.dev",
+            "to": email,
+            "subject": "Tu código de acceso al sistema UCE",
+            "html": f"<p>Tu código de verificación es: <strong>{codigo}</strong></p>"
+        })
+        print(f"Te hemos enviado un código de seguridad a {email}.")
+    except Exception as e:
+        print(f"Error al enviar el correo de 2FA: {e}")
+        return False
+        
+    intentos = 3
+    while intentos > 0:
+        respuesta = input("Ingresa tu código de 6 dígitos: ").strip()
+        if respuesta == codigo:
+            print("Autenticación de dos pasos exitosa.")
+            return True
+        intentos -= 1
+        print(f"Código incorrecto. Te quedan {intentos} intentos.")
+        
+    return False
+
+
 def main() -> int:
     """
-    Punto de entrada: conectar → login → menú → cerrar.
+    Punto de entrada: conectar → login → 2FA → menú → cerrar.
 
     Profesor: el `finally: conn.close()` libera el socket aunque haya error o Ctrl+C
     en algunos entornos; es hábito sano con bases de datos.
@@ -346,6 +383,11 @@ def main() -> int:
         if not user:
             print("Credenciales inválidas.")
             return 1
+            
+        if not two_factor_auth(user["email"]):
+            print("No se pudo completar la autenticación de dos factores.")
+            return 1
+            
         run_menu(conn, user)
     finally:
         conn.close()

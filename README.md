@@ -17,7 +17,9 @@ mysql -u root -p < schema.sql
 # Si ya existía la BD (sin tabla notas u otros cambios), borra y recrea:
 # mysql -u root -p -e "DROP DATABASE IF EXISTS ejercicio_auth;" && mysql -u root -p < schema.sql
 pip install -r requirements.txt
-export MYSQL_USER=root MYSQL_PASSWORD=tu_clave   # si aplica
+export MYSQL_USER=root 
+export MYSQL_PASSWORD=tu_clave   # si aplica
+export RESEND_API_KEY=tu_key_resend
 python app.py
 ```
 
